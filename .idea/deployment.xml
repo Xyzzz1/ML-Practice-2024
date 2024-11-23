@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="PublishConfigData" autoUpload="Always" serverName="xuruiqi@10.112.213.76:17877" remoteFilesAllowedToDisappearOnAutoupload="false">
+    <serverData>
+      <paths name="xuruiqi@10.112.213.76:17877">
+        <serverdata>
+          <mappings>
+            <mapping deploy="/home/xuruiqi/code/codeOfAI4CardinalityEstimation" local="$PROJECT_DIR$" web="/" />
+            <mapping local="" />
+          </mappings>
+        </serverdata>
+      </paths>
+    </serverData>
+    <option name="myAutoUpload" value="ALWAYS" />
+  </component>
+</project>
