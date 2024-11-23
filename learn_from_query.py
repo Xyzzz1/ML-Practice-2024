@@ -11,15 +11,35 @@ import statistics as stats
 def min_max_normalize(v, min_v, max_v):
     # The function may be useful when dealing with lower/upper bounds of columns.
     assert max_v > min_v
-    return (v-min_v)/(max_v-min_v)
+    return (v - min_v) / (max_v - min_v)
+
+
+def get_normalized_val(column_stats, val):
+    min_v = column_stats.min_val()
+    max_v = column_stats.max_val()
+    return min_max_normalize(val, min_v, max_v)
 
 
 def extract_features_from_query(range_query, table_stats, considered_cols):
     # feat:     [c1_begin, c1_end, c2_begin, c2_end, ... cn_begin, cn_end, AVI_sel, EBO_sel, Min_sel]
     #           <-                   range features                    ->, <-     est features     ->
-    feature = []
+    # feature = []
     # YOUR CODE HERE: extract features from query
-    return feature
+
+    # 建模：[c1L, c1R, c2L, c2R, …, cNL, cNR]
+    feature = [[float('-inf'), float('inf')] for _ in range(6)]
+
+    for col, val in range_query.col_left.items():
+        normalized_val = get_normalized_val(table_stats.columns[col], val)
+        col_index = considered_cols.index(col)
+        feature[col_index][0] = normalized_val
+
+    for col, val in range_query.col_right.items():
+        normalized_val = get_normalized_val(table_stats.columns[col], val)
+        col_index = considered_cols.index(col)
+        feature[col_index][1] = normalized_val
+
+    return [item for sublist in feature for item in sublist]
 
 
 def preprocess_queries(queris, table_stats, columns):
@@ -29,11 +49,11 @@ def preprocess_queries(queris, table_stats, columns):
     features, labels = [], []
     for item in queris:
         query, act_rows = item['query'], item['act_rows']
-        feature, label = None, None
-        # YOUR CODE HERE: transform (query, act_rows) to (feature, label)
-        # Some functions like rq.ParsedRangeQuery.parse_range_query and extract_features_from_query may be helpful.
+        parsed_query = rq.ParsedRangeQuery.parse_range_query(query)
+        feature = extract_features_from_query(parsed_query, table_stats, columns)
+
         features.append(feature)
-        labels.append(label)
+        labels.append(act_rows)
     return features, labels
 
 
