@@ -101,9 +101,9 @@ def eval_model(model, train_data, test_data, table_stats, columns):
 
 
 if __name__ == '__main__':
-    stats_json_file = './title_stats.json'
-    train_json_file = './query_train_18000.json'
-    test_json_file = './validation_2000.json'
+    stats_json_file = 'data/title_stats.json'
+    train_json_file = 'data/query_train_18000.json'
+    test_json_file = 'data/validation_2000.json'
     columns = ['kind_id', 'production_year', 'imdb_id', 'episode_of_id', 'season_nr', 'episode_nr']
     table_stats = stats.TableStats.load_from_json_file(stats_json_file, columns)
     with open(train_json_file, 'r') as f:
