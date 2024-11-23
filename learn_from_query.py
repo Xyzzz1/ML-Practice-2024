@@ -49,8 +49,13 @@ def preprocess_queries(queris, table_stats, columns):
     features, labels = [], []
     for item in queris:
         query, act_rows = item['query'], item['act_rows']
-        parsed_query = rq.ParsedRangeQuery.parse_range_query(query)
-        feature = extract_features_from_query(parsed_query, table_stats, columns)
+        range_query = rq.ParsedRangeQuery.parse_range_query(query)
+        feature = extract_features_from_query(range_query, table_stats, columns)
+
+        # 特征增强
+        feature.append(stats.AVIEstimator.estimate(range_query, table_stats) * table_stats.row_count)
+        feature.append(stats.ExpBackoffEstimator.estimate(range_query, table_stats) * table_stats.row_count)
+        feature.append(stats.MinSelEstimator.estimate(range_query, table_stats) * table_stats.row_count)
 
         features.append(feature)
         labels.append(act_rows)
