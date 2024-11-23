@@ -289,17 +289,52 @@ class ExpBackoffEstimator:
         s(1) * s(2)^(1/2) * s(3)^(1/4) * s(4)^(1/8),
     where s(k) represents k-th most selective fraction across all predicates.
     """
+
     @staticmethod
     def estimate(range_query, table_stats):
-        # YOUR CODE HERE
-        pass
+        selectivities = []
+
+        # Calculate selectivity for each column in the range query
+        for col in range_query.column_names():
+            min_val = table_stats.columns[col].min_val()
+            max_val = table_stats.columns[col].max_val()
+            (left, right) = range_query.column_range(col, min_val, max_val)
+            col_cnt = table_stats.columns[col].between_row_count(left + 1, right)  # (left, right) -> [left, right)
+            col_sel = col_cnt / table_stats.row_count
+            selectivities.append(col_sel)
+
+        # Sort selectivities in ascending order
+        selectivities.sort()
+
+        # Take the four most selective (smallest) values
+        top_4 = selectivities[:4]
+
+        # Calculate combined selectivity using Exponential BackOff formula
+        combined_sel = 1.0
+        for i, sel in enumerate(top_4):
+            combined_sel *= sel ** (1 / (2 ** i))
+
+        return combined_sel
 
 
 class MinSelEstimator:
     """
     MinimumSel: returns the combined selectivity as the minimum selectivity across individual predicates
     """
+
     @staticmethod
     def estimate(range_query, table_stats):
-        # YOUR CODE HERE
-        pass
+        min_selectivity = float('inf')  # Start with the maximum possible value
+
+        # Calculate selectivity for each column in the range query
+        for col in range_query.column_names():
+            min_val = table_stats.columns[col].min_val()
+            max_val = table_stats.columns[col].max_val()
+            (left, right) = range_query.column_range(col, min_val, max_val)
+            col_cnt = table_stats.columns[col].between_row_count(left + 1, right)  # (left, right) -> [left, right)
+            col_sel = col_cnt / table_stats.row_count
+
+            # Update the minimum selectivity
+            min_selectivity = min(min_selectivity, col_sel)
+
+        return min_selectivity
