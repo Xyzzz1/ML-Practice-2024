@@ -3,9 +3,12 @@ import matplotlib.pyplot as plt
 import numpy as np
 import range_query as rq
 import json
+from tqdm import tqdm
 import torch
-import torch.nn as nn
 import statistics as stats
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import mean_squared_error
+from sklearn.ensemble import RandomForestRegressor
 
 
 def min_max_normalize(v, min_v, max_v):
@@ -27,7 +30,7 @@ def extract_features_from_query(range_query, table_stats, considered_cols):
     # YOUR CODE HERE: extract features from query
 
     # 建模：[c1L, c1R, c2L, c2R, …, cNL, cNR]
-    feature = [[float('-inf'), float('inf')] for _ in range(6)]
+    feature = [[0, 0] for _ in range(6)]
 
     for col, val in range_query.col_left.items():
         normalized_val = get_normalized_val(table_stats.columns[col], val)
@@ -47,6 +50,7 @@ def preprocess_queries(queris, table_stats, columns):
     preprocess_queries turn queries into features and labels, which are used for regression model.
     """
     features, labels = [], []
+    #queris = queris[:2000]
     for item in queris:
         query, act_rows = item['query'], item['act_rows']
         range_query = rq.ParsedRangeQuery.parse_range_query(query)
@@ -66,27 +70,90 @@ class QueryDataset(torch.utils.data.Dataset):
     def __init__(self, queries, table_stats, columns):
         super().__init__()
         self.query_data = list(zip(*preprocess_queries(queries, table_stats, columns)))
+        self.features, self.labels = preprocess_queries(queries, table_stats, columns)
 
     def __getitem__(self, index):
         return self.query_data[index]
+        # feature = torch.tensor(self.features[index], dtype=torch.float32)
+        # label = torch.tensor(self.labels[index], dtype=torch.float32)
+        # return feature, label
 
     def __len__(self):
         return len(self.query_data)
 
+def calculate_q_error(actual, predicted):
+    """
+    Calculate q-error for a list of actual and predicted values.
+    """
+    q_errors = [
+        max(act / est, est / act) if act > 0 and est > 0 else float('inf')  # Avoid division by zero
+        for act, est in zip(actual, predicted)
+    ]
+    return q_errors
+
+
 
 def est_AI1(train_data, test_data, table_stats, columns):
     """
-    produce estimated rows for train_data and test_data
+    Produce estimated rows for train_data and test_data using Logistic Regression with train_loader and test_loader.
     """
+    # Prepare train and test loaders
     train_dataset = QueryDataset(train_data, table_stats, columns)
     train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=10, shuffle=True, num_workers=1)
-    train_est_rows, train_act_rows = [], []
-    # YOUR CODE HERE: train procedure
 
     test_dataset = QueryDataset(test_data, table_stats, columns)
-    test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=10, shuffle=True, num_workers=1)
-    test_est_rows, test_act_rows = [], []
-    # YOUR CODE HERE: test procedure
+    test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=10, shuffle=False, num_workers=1)
+
+    # Prepare training data from train_loader
+    train_features, train_labels = [], []
+    for data in train_dataset:
+        features, label = data
+        train_features.append(features)
+        train_labels.append(label)
+
+    train_features = np.array(train_features)
+    train_labels = np.array(train_labels)
+
+    print("data loaded!")
+    # Define and train the model
+    # model = LogisticRegression(max_iter=1000,n_jobs=-1)
+    # model.fit(train_features, train_labels)
+
+    model = LogisticRegression(max_iter=1, n_jobs=-1)
+    for epoch in tqdm(range(100), desc="Training Progress"):
+        model.fit(train_features, train_labels)
+
+    # Prepare testing data from test_loader
+    test_features, test_labels = [], []
+    for data in test_dataset:
+        features, label = data
+        test_features.append(features)
+        test_labels.append(label)
+
+    test_features = np.array(test_features)
+    test_labels = np.array(test_labels)
+
+    # Make predictions
+    train_predictions = model.predict(train_features)
+    test_predictions = model.predict(test_features)
+
+    # Calculate q-errors for train and test
+    train_q_errors = calculate_q_error(train_labels, train_predictions)
+    test_q_errors = calculate_q_error(test_labels, test_predictions)
+
+    # Calculate MSE of q-errors
+    train_mse = np.mean(np.square(train_q_errors))
+    test_mse = np.mean(np.square(test_q_errors))
+
+    print("LogisticRegression")
+    print(f"Train MSE: {train_mse}")
+    print(f"Test MSE: {test_mse}")
+
+    # Convert results to lists for output
+    train_est_rows = train_predictions.tolist()
+    train_act_rows = train_labels.tolist()
+    test_est_rows = test_predictions.tolist()
+    test_act_rows = test_labels.tolist()
 
     return train_est_rows, train_act_rows, test_est_rows, test_act_rows
 
@@ -95,13 +162,63 @@ def est_AI2(train_data, test_data, table_stats, columns):
     """
     produce estimated rows for train_data and test_data
     """
-    train_x, train_y = preprocess_queries(train_data, table_stats, columns)
-    train_est_rows, train_act_rows = [], []
-    # YOUR CODE HERE: train procedure
+    # Prepare train and test loaders
+    train_dataset = QueryDataset(train_data, table_stats, columns)
+    train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=10, shuffle=True, num_workers=1)
 
-    test_x, test_y = preprocess_queries(test_data, table_stats, columns)
-    test_est_rows, test_act_rows = [], []
-    # YOUR CODE HERE: test procedure
+    test_dataset = QueryDataset(test_data, table_stats, columns)
+    test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=10, shuffle=False, num_workers=1)
+
+    # Prepare training data from train_loader
+    train_features, train_labels = [], []
+    for data in train_dataset:
+        features, label = data
+        train_features.append(features)
+        train_labels.append(label)
+
+    train_features = np.array(train_features)
+    train_labels = np.array(train_labels)
+
+    print("data loaded!")
+    # Define and train the model
+    # model = LogisticRegression(max_iter=1000,n_jobs=-1)
+    # model.fit(train_features, train_labels)
+
+    model = RandomForestRegressor(n_estimators=200, n_jobs=-1, random_state=42)
+    for epoch in tqdm(range(500), desc=" RandomForest Training Progress"):
+        model.fit(train_features, train_labels)
+
+    # Prepare testing data from test_loader
+    test_features, test_labels = [], []
+    for data in test_dataset:
+        features, label = data
+        test_features.append(features)
+        test_labels.append(label)
+
+    test_features = np.array(test_features)
+    test_labels = np.array(test_labels)
+
+    # Make predictions
+    train_predictions = model.predict(train_features)
+    test_predictions = model.predict(test_features)
+
+    # Calculate q-errors for train and test
+    train_q_errors = calculate_q_error(train_labels, train_predictions)
+    test_q_errors = calculate_q_error(test_labels, test_predictions)
+
+    # Calculate MSE of q-errors
+    train_mse = np.mean(np.square(train_q_errors))
+    test_mse = np.mean(np.square(test_q_errors))
+
+    print("LogisticRegression")
+    print(f"Train MSE: {train_mse}")
+    print(f"Test MSE: {test_mse}")
+
+    # Convert results to lists for output
+    train_est_rows = train_predictions.tolist()
+    train_act_rows = train_labels.tolist()
+    test_est_rows = test_predictions.tolist()
+    test_act_rows = test_labels.tolist()
 
     return train_est_rows, train_act_rows, test_est_rows, test_act_rows
 
