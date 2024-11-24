@@ -9,6 +9,11 @@ import statistics as stats
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import mean_squared_error
 from sklearn.ensemble import RandomForestRegressor
+from sklearn.neighbors import KNeighborsRegressor
+from sklearn.svm import SVR
+from lightgbm import LGBMRegressor
+from xgboost import XGBRegressor
+from joblib import dump
 
 
 def min_max_normalize(v, min_v, max_v):
@@ -50,7 +55,7 @@ def preprocess_queries(queris, table_stats, columns):
     preprocess_queries turn queries into features and labels, which are used for regression model.
     """
     features, labels = [], []
-    #queris = queris[:2000]
+    # queris = queris[:2000]
     for item in queris:
         query, act_rows = item['query'], item['act_rows']
         range_query = rq.ParsedRangeQuery.parse_range_query(query)
@@ -81,6 +86,7 @@ class QueryDataset(torch.utils.data.Dataset):
     def __len__(self):
         return len(self.query_data)
 
+
 def calculate_q_error(actual, predicted):
     """
     Calculate q-error for a list of actual and predicted values.
@@ -92,18 +98,17 @@ def calculate_q_error(actual, predicted):
     return q_errors
 
 
+def load_data(train_data, test_data, table_stats, columns):
+    train_dataset = QueryDataset(train_data, table_stats, columns)
+    test_dataset = QueryDataset(test_data, table_stats, columns)
+    return train_dataset, test_dataset
 
-def est_AI1(train_data, test_data, table_stats, columns):
+
+# LogisticRegression
+def est_AI1(train_dataset, test_dataset, model_saved_path):
     """
     Produce estimated rows for train_data and test_data using Logistic Regression with train_loader and test_loader.
     """
-    # Prepare train and test loaders
-    train_dataset = QueryDataset(train_data, table_stats, columns)
-    train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=10, shuffle=True, num_workers=1)
-
-    test_dataset = QueryDataset(test_data, table_stats, columns)
-    test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=10, shuffle=False, num_workers=1)
-
     # Prepare training data from train_loader
     train_features, train_labels = [], []
     for data in train_dataset:
@@ -114,13 +119,13 @@ def est_AI1(train_data, test_data, table_stats, columns):
     train_features = np.array(train_features)
     train_labels = np.array(train_labels)
 
-    print("data loaded!")
+    print("LogisticRegression training start")
     # Define and train the model
     # model = LogisticRegression(max_iter=1000,n_jobs=-1)
     # model.fit(train_features, train_labels)
 
     model = LogisticRegression(max_iter=1, n_jobs=-1)
-    for epoch in tqdm(range(100), desc="Training Progress"):
+    for epoch in tqdm(range(100), desc="LogisticRegression Training Progress"):
         model.fit(train_features, train_labels)
 
     # Prepare testing data from test_loader
@@ -145,9 +150,11 @@ def est_AI1(train_data, test_data, table_stats, columns):
     train_mse = np.mean(np.square(train_q_errors))
     test_mse = np.mean(np.square(test_q_errors))
 
-    print("LogisticRegression")
     print(f"Train MSE: {train_mse}")
     print(f"Test MSE: {test_mse}")
+
+    dump(model, model_saved_path + '/LogisticRegression.joblib')
+    print("model saved!")
 
     # Convert results to lists for output
     train_est_rows = train_predictions.tolist()
@@ -158,17 +165,11 @@ def est_AI1(train_data, test_data, table_stats, columns):
     return train_est_rows, train_act_rows, test_est_rows, test_act_rows
 
 
-def est_AI2(train_data, test_data, table_stats, columns):
+# RandomForest
+def est_AI2(train_dataset, test_dataset, model_saved_path):
     """
     produce estimated rows for train_data and test_data
     """
-    # Prepare train and test loaders
-    train_dataset = QueryDataset(train_data, table_stats, columns)
-    train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=10, shuffle=True, num_workers=1)
-
-    test_dataset = QueryDataset(test_data, table_stats, columns)
-    test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=10, shuffle=False, num_workers=1)
-
     # Prepare training data from train_loader
     train_features, train_labels = [], []
     for data in train_dataset:
@@ -179,13 +180,13 @@ def est_AI2(train_data, test_data, table_stats, columns):
     train_features = np.array(train_features)
     train_labels = np.array(train_labels)
 
-    print("data loaded!")
+    print("RandomForest training start")
     # Define and train the model
     # model = LogisticRegression(max_iter=1000,n_jobs=-1)
     # model.fit(train_features, train_labels)
 
-    model = RandomForestRegressor(n_estimators=200, n_jobs=-1, random_state=42)
-    for epoch in tqdm(range(500), desc=" RandomForest Training Progress"):
+    model = RandomForestRegressor(n_estimators=200, max_depth=None, n_jobs=-1, random_state=42)
+    for epoch in tqdm(range(1000), desc="RandomForest Training Progress"):
         model.fit(train_features, train_labels)
 
     # Prepare testing data from test_loader
@@ -210,9 +211,266 @@ def est_AI2(train_data, test_data, table_stats, columns):
     train_mse = np.mean(np.square(train_q_errors))
     test_mse = np.mean(np.square(test_q_errors))
 
-    print("LogisticRegression")
     print(f"Train MSE: {train_mse}")
     print(f"Test MSE: {test_mse}")
+
+    dump(model, model_saved_path + '/RandomForest.joblib')
+    print("model saved!")
+
+    # Convert results to lists for output
+    train_est_rows = train_predictions.tolist()
+    train_act_rows = train_labels.tolist()
+    test_est_rows = test_predictions.tolist()
+    test_act_rows = test_labels.tolist()
+
+    return train_est_rows, train_act_rows, test_est_rows, test_act_rows
+
+
+# KNN
+def est_AI3(train_dataset, test_dataset, model_saved_path):
+    """
+    produce estimated rows for train_data and test_data
+    """
+    # Prepare train and test loaders
+    # Prepare training data from train_loader
+    train_features, train_labels = [], []
+    for data in train_dataset:
+        features, label = data
+        train_features.append(features)
+        train_labels.append(label)
+
+    train_features = np.array(train_features)
+    train_labels = np.array(train_labels)
+
+    print("KNN training start")
+    # Define and train the model
+    # model = LogisticRegression(max_iter=1000,n_jobs=-1)
+    # model.fit(train_features, train_labels)
+
+    model = KNeighborsRegressor(n_neighbors=5, n_jobs=-1)
+    model.fit(train_features, train_labels)
+
+    # Prepare testing data from test_loader
+    test_features, test_labels = [], []
+    for data in test_dataset:
+        features, label = data
+        test_features.append(features)
+        test_labels.append(label)
+
+    test_features = np.array(test_features)
+    test_labels = np.array(test_labels)
+
+    # Make predictions
+    train_predictions = model.predict(train_features)
+    test_predictions = model.predict(test_features)
+
+    # Calculate q-errors for train and test
+    train_q_errors = calculate_q_error(train_labels, train_predictions)
+    test_q_errors = calculate_q_error(test_labels, test_predictions)
+
+    # Calculate MSE of q-errors
+    train_mse = np.mean(np.square(train_q_errors))
+    test_mse = np.mean(np.square(test_q_errors))
+
+    print(f"Train MSE: {train_mse}")
+    print(f"Test MSE: {test_mse}")
+
+    dump(model, model_saved_path + '/KNN.joblib')
+    print("model saved!")
+
+    # Convert results to lists for output
+    train_est_rows = train_predictions.tolist()
+    train_act_rows = train_labels.tolist()
+    test_est_rows = test_predictions.tolist()
+    test_act_rows = test_labels.tolist()
+
+    return train_est_rows, train_act_rows, test_est_rows, test_act_rows
+
+
+# SVM
+def est_AI4(train_dataset, test_dataset, model_saved_path):
+    """
+    produce estimated rows for train_data and test_data
+    """
+    # Prepare training data from train_loader
+    train_features, train_labels = [], []
+    for data in train_dataset:
+        features, label = data
+        train_features.append(features)
+        train_labels.append(label)
+
+    train_features = np.array(train_features)
+    train_labels = np.array(train_labels)
+
+    print("SVM training start")
+    # Define and train the model
+    # model = LogisticRegression(max_iter=1000,n_jobs=-1)
+    # model.fit(train_features, train_labels)
+
+    model = SVR(kernel='rbf', C=1.0, epsilon=0.1)
+    model.fit(train_features, train_labels)
+
+    # Prepare testing data from test_loader
+    test_features, test_labels = [], []
+    for data in test_dataset:
+        features, label = data
+        test_features.append(features)
+        test_labels.append(label)
+
+    test_features = np.array(test_features)
+    test_labels = np.array(test_labels)
+
+    # Make predictions
+    train_predictions = model.predict(train_features)
+    test_predictions = model.predict(test_features)
+
+    # Calculate q-errors for train and test
+    train_q_errors = calculate_q_error(train_labels, train_predictions)
+    test_q_errors = calculate_q_error(test_labels, test_predictions)
+
+    # Calculate MSE of q-errors
+    train_mse = np.mean(np.square(train_q_errors))
+    test_mse = np.mean(np.square(test_q_errors))
+
+    print(f"Train MSE: {train_mse}")
+    print(f"Test MSE: {test_mse}")
+
+    dump(model, model_saved_path + '/SVR.joblib')
+    print("model saved!")
+
+    # Convert results to lists for output
+    train_est_rows = train_predictions.tolist()
+    train_act_rows = train_labels.tolist()
+    test_est_rows = test_predictions.tolist()
+    test_act_rows = test_labels.tolist()
+
+    return train_est_rows, train_act_rows, test_est_rows, test_act_rows
+
+
+# LightBGM
+def est_AI5(train_dataset, test_dataset, model_saved_path):
+    """
+    produce estimated rows for train_data and test_data
+    """
+    # Prepare training data from train_loader
+    train_features, train_labels = [], []
+    for data in train_dataset:
+        features, label = data
+        train_features.append(features)
+        train_labels.append(label)
+
+    train_features = np.array(train_features)
+    train_labels = np.array(train_labels)
+
+    print("LightBGM training start")
+    # Define and train the model
+    # model = LogisticRegression(max_iter=1000,n_jobs=-1)
+    # model.fit(train_features, train_labels)
+
+    model = LGBMRegressor(
+        n_estimators=200,  # 使用 200 棵树
+        max_depth=-1,  # 自动调整深度
+        learning_rate=0.1,  # 学习率
+        random_state=42,  # 随机种子
+        n_jobs=-1  # 多线程支持
+    )
+
+    model.fit(train_features, train_labels)
+
+    # Prepare testing data from test_loader
+    test_features, test_labels = [], []
+    for data in test_dataset:
+        features, label = data
+        test_features.append(features)
+        test_labels.append(label)
+
+    test_features = np.array(test_features)
+    test_labels = np.array(test_labels)
+
+    # Make predictions
+    train_predictions = model.predict(train_features)
+    test_predictions = model.predict(test_features)
+
+    # Calculate q-errors for train and test
+    train_q_errors = calculate_q_error(train_labels, train_predictions)
+    test_q_errors = calculate_q_error(test_labels, test_predictions)
+
+    # Calculate MSE of q-errors
+    train_mse = np.mean(np.square(train_q_errors))
+    test_mse = np.mean(np.square(test_q_errors))
+
+    print(f"Train MSE: {train_mse}")
+    print(f"Test MSE: {test_mse}")
+
+    dump(model, model_saved_path + '/LightBGM.joblib')
+    print("model saved!")
+
+    # Convert results to lists for output
+    train_est_rows = train_predictions.tolist()
+    train_act_rows = train_labels.tolist()
+    test_est_rows = test_predictions.tolist()
+    test_act_rows = test_labels.tolist()
+
+    return train_est_rows, train_act_rows, test_est_rows, test_act_rows
+
+
+# XGBoost
+def est_AI6(train_dataset, test_dataset, model_saved_path):
+    """
+    produce estimated rows for train_data and test_data
+    """
+    # Prepare training data from train_loader
+    train_features, train_labels = [], []
+    for data in train_dataset:
+        features, label = data
+        train_features.append(features)
+        train_labels.append(label)
+
+    train_features = np.array(train_features)
+    train_labels = np.array(train_labels)
+
+    print("XGBoost training start")
+    # Define and train the model
+    # model = LogisticRegression(max_iter=1000,n_jobs=-1)
+    # model.fit(train_features, train_labels)
+
+    model = XGBRegressor(
+        n_estimators=200,  # 树的数量
+        max_depth=6,  # 每棵树的最大深度
+        learning_rate=0.1,  # 学习率
+        random_state=42,  # 随机种子
+        n_jobs=-1  # 多线程支持
+    )
+
+    model.fit(train_features, train_labels)
+
+    # Prepare testing data from test_loader
+    test_features, test_labels = [], []
+    for data in test_dataset:
+        features, label = data
+        test_features.append(features)
+        test_labels.append(label)
+
+    test_features = np.array(test_features)
+    test_labels = np.array(test_labels)
+
+    # Make predictions
+    train_predictions = model.predict(train_features)
+    test_predictions = model.predict(test_features)
+
+    # Calculate q-errors for train and test
+    train_q_errors = calculate_q_error(train_labels, train_predictions)
+    test_q_errors = calculate_q_error(test_labels, test_predictions)
+
+    # Calculate MSE of q-errors
+    train_mse = np.mean(np.square(train_q_errors))
+    test_mse = np.mean(np.square(test_q_errors))
+
+    print(f"Train MSE: {train_mse}")
+    print(f"Test MSE: {test_mse}")
+
+    dump(model, model_saved_path + '/LightBGM.joblib')
+    print("model saved!")
 
     # Convert results to lists for output
     train_est_rows = train_predictions.tolist()

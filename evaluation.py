@@ -45,13 +45,14 @@ if __name__ == '__main__':
         est_min_sel.append(stats.MinSelEstimator.estimate(range_query, table_stats) * table_stats.row_count)
         act.append(item['act_rows'])
 
-    #_, _, est_AI1, _ = learn_from_query.est_AI1(train_data, test_data, table_stats, columns)
-    _, _, est_AI2, _ = learn_from_query.est_AI2(train_data, test_data, table_stats, columns)
+    model_saved_path = './trained_model'
+    train_dataset, test_dataset = learn_from_query.load_data(train_data, test_data, table_stats, columns)
+    _, _, est_AI4, _ = learn_from_query.est_AI6(train_dataset, test_dataset, model_saved_path)
 
     gen_report(act, {
         "avi": est_avi,
         "ebo": est_ebo,
         "min_sel": est_min_sel,
-        #"LogisticRegression": est_AI1
-        "RandomForest": est_AI2
+        # "LogisticRegression": est_AI1
+        "XGBoost": est_AI4
     })
