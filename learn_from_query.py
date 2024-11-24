@@ -10,7 +10,7 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import mean_squared_error
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.neighbors import KNeighborsRegressor
-from sklearn.svm import SVR
+from sklearn.svm import LinearSVR
 from lightgbm import LGBMRegressor
 from xgboost import XGBRegressor
 from sklearn.neural_network import MLPRegressor
@@ -308,7 +308,7 @@ def est_AI4(train_dataset, test_dataset, model_saved_path):
     # model = LogisticRegression(max_iter=1000,n_jobs=-1)
     # model.fit(train_features, train_labels)
 
-    model = SVR(kernel='rbf', C=1.0, epsilon=0.1)
+    model = LinearSVR(max_iter=1000, random_state=42)
     model.fit(train_features, train_labels)
 
     # Prepare testing data from test_loader
@@ -336,7 +336,7 @@ def est_AI4(train_dataset, test_dataset, model_saved_path):
     print(f"Train MSE: {train_mse}")
     print(f"Test MSE: {test_mse}")
 
-    dump(model, model_saved_path + '/SVR.joblib')
+    dump(model, model_saved_path + '/LinearSVR.joblib')
     print("model saved!")
 
     # Convert results to lists for output
