@@ -13,6 +13,7 @@ from sklearn.neighbors import KNeighborsRegressor
 from sklearn.svm import SVR
 from lightgbm import LGBMRegressor
 from xgboost import XGBRegressor
+from sklearn.neural_network import MLPRegressor
 from joblib import dump
 
 
@@ -470,6 +471,73 @@ def est_AI6(train_dataset, test_dataset, model_saved_path):
     print(f"Test MSE: {test_mse}")
 
     dump(model, model_saved_path + '/LightBGM.joblib')
+    print("model saved!")
+
+    # Convert results to lists for output
+    train_est_rows = train_predictions.tolist()
+    train_act_rows = train_labels.tolist()
+    test_est_rows = test_predictions.tolist()
+    test_act_rows = test_labels.tolist()
+
+    return train_est_rows, train_act_rows, test_est_rows, test_act_rows
+
+
+# MLP
+def est_AI7(train_dataset, test_dataset, model_saved_path):
+    """
+    produce estimated rows for train_data and test_data
+    """
+    # Prepare training data from train_loader
+    train_features, train_labels = [], []
+    for data in train_dataset:
+        features, label = data
+        train_features.append(features)
+        train_labels.append(label)
+
+    train_features = np.array(train_features)
+    train_labels = np.array(train_labels)
+
+    print("MLP training start")
+    # Define and train the model
+    # model = LogisticRegression(max_iter=1000,n_jobs=-1)
+    # model.fit(train_features, train_labels)
+
+    model = MLPRegressor(
+        hidden_layer_sizes=(100, 50),  # 两层隐藏层
+        max_iter=1000,  # 最大迭代次数
+        learning_rate='adaptive',  # 动态调整学习率
+        random_state=42,  # 设置随机种子
+        early_stopping=True  # 启用早停以防止过拟合
+    )
+
+    model.fit(train_features, train_labels)
+
+    # Prepare testing data from test_loader
+    test_features, test_labels = [], []
+    for data in test_dataset:
+        features, label = data
+        test_features.append(features)
+        test_labels.append(label)
+
+    test_features = np.array(test_features)
+    test_labels = np.array(test_labels)
+
+    # Make predictions
+    train_predictions = model.predict(train_features)
+    test_predictions = model.predict(test_features)
+
+    # Calculate q-errors for train and test
+    train_q_errors = calculate_q_error(train_labels, train_predictions)
+    test_q_errors = calculate_q_error(test_labels, test_predictions)
+
+    # Calculate MSE of q-errors
+    train_mse = np.mean(np.square(train_q_errors))
+    test_mse = np.mean(np.square(test_q_errors))
+
+    print(f"Train MSE: {train_mse}")
+    print(f"Test MSE: {test_mse}")
+
+    dump(model, model_saved_path + '/MLP.joblib')
     print("model saved!")
 
     # Convert results to lists for output

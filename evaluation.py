@@ -5,8 +5,8 @@ import range_query as rq
 import learn_from_query
 
 
-def gen_report(act, est_results):
-    f = open("./eval/report.md", "w")
+def gen_report(act, est_results, saved_path):
+    f = open(saved_path + "/report.md", "w")
     f.write("| name | p50 | p80 | p90 | p99 |\n")
     f.write("| --- | --- | --- | --- | --- |\n")
     for name in est_results:
@@ -47,12 +47,24 @@ if __name__ == '__main__':
 
     model_saved_path = './trained_model'
     train_dataset, test_dataset = learn_from_query.load_data(train_data, test_data, table_stats, columns)
-    _, _, est_AI4, _ = learn_from_query.est_AI6(train_dataset, test_dataset, model_saved_path)
+    # _, _, est_AI1, _ = learn_from_query.est_AI1(train_dataset, test_dataset, model_saved_path)
+    _, _, est_AI2, _ = learn_from_query.est_AI2(train_dataset, test_dataset, model_saved_path)
+    _, _, est_AI3, _ = learn_from_query.est_AI3(train_dataset, test_dataset, model_saved_path)
+    _, _, est_AI4, _ = learn_from_query.est_AI4(train_dataset, test_dataset, model_saved_path)
+    _, _, est_AI5, _ = learn_from_query.est_AI5(train_dataset, test_dataset, model_saved_path)
+    _, _, est_AI6, _ = learn_from_query.est_AI6(train_dataset, test_dataset, model_saved_path)
+    _, _, est_AI7, _ = learn_from_query.est_AI7(train_dataset, test_dataset, model_saved_path)
 
+    results_saved_path = './eval'
     gen_report(act, {
         "avi": est_avi,
         "ebo": est_ebo,
         "min_sel": est_min_sel,
         # "LogisticRegression": est_AI1
-        "XGBoost": est_AI4
-    })
+        "KNN": est_AI3,
+        "SVM": est_AI4,
+        "RandomForest": est_AI2,
+        "LightBGM": est_AI5,
+        "XGBoost": est_AI6,
+        "MLP": est_AI7
+    }, results_saved_path)
